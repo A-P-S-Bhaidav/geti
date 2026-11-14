@@ -1,0 +1,52 @@
+name: Video frame stepping validation
+
+on:
+  push:
+    branches:
+      - test/ui/verify-video-frame-stepping
+
+permissions:
+  contents: read
+
+jobs:
+  ui-validation:
+    if: github.repository == 'A-P-S-Bhaidav/geti'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: application/ui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: application/ui/.nvmrc
+          package-manager-cache: false
+      - name: Install required npm version
+        run: npm install --global npm@11.14.0
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Generate API types from the upstream schema artifact
+        run: npm run build:api
+      - name: Run the full UI unit suite
+        run: npm run test:unit -- --pool.maxWorkers 2
+      - name: Check formatting
+        run: npm run format:check
+      - name: Run ESLint
+        run: npm run lint
+      - name: Check import cycles
+        run: npm run cyclic-deps-check
+      - name: Check TypeScript
+        run: npm run type-check
+      - name: Build production UI
+        env:
+          PUBLIC_API_BASE_URL: http://localhost:7860
+        run: npm run build
+      - name: Build desktop UI assets
+        run: npm run build:tauri
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run video annotator component tests
+        run: npx playwright test tests/annotator/video/video.spec.ts --project=component --workers=1 --retries=0 --reporter=list
